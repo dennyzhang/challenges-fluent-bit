@@ -35,9 +35,15 @@ It calls something like: https://kubernetes.default.svc.cluster.local:443/api/v1
 
 The logic is like this:
 
-kubernetes.c:cb_kube_filter -> kube_meta.c:flb_kube_meta_get/get_and_merge_meta -> kube_meta.c:get_api_server_info -> kube_meta.h:FLB_KUBE_API_FMT
+#+BEGIN_EXAMPLE
+    kubernetes.c:cb_kube_filter ->
+    kube_meta.c:flb_kube_meta_get/get_and_merge_meta ->
+    kube_meta.c:get_api_server_info ->
+    kube_meta.h:FLB_KUBE_API_FMT
+#+END_EXAMPLE
 
 https://github.com/fluent/fluent-bit/blob/master/plugins/filter_kubernetes/kube_meta.h#L54
+
 https://github.com/fluent/fluent-bit/blob/master/plugins/filter_kubernetes/kube_meta.c#L590
 
 https://github.com/fluent/fluent-bit/blob/master/plugins/filter_kubernetes/kube_meta.c#L138
