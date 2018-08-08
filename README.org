@@ -221,6 +221,14 @@ Hi,
 
 if I am not wrong when a Pod get's deleted, the log files for that container persists for a period of time. Now the re-scan of the path to find new logs happens by default every 60 seconds or based in the value of "Refresh_Interval" (which you have set to 10 seconds).
 #+END_EXAMPLE
+*** For tail_file input plugin of fluent-bit, could I specify file path like: /var/log/*/apache/*.log?
+It eventually use *glob* function of C. So probably, yes.
+
+tail_scan.c:flb_tail_scan -> tail_scan.c:do_glob
+
+https://github.com/fluent/fluent-bit/blob/master/plugins/in_tail/tail_scan.c#L150
+
+https://github.com/fluent/fluent-bit/blob/master/plugins/in_tail/tail_scan.c#L202
 * More Resources
 License: Code is licensed under [[https://www.dennyzhang.com/wp-content/mit_license.txt][MIT License]].
 #+BEGIN_HTML
@@ -473,3 +481,36 @@ http://edsiper.linuxchile.cl/blog/
 ** TODO /Users/zdenny/Dropbox/private_data/work/vmware/fluent-bit/plugins/filter_kubernetes/kubernetes.c
 ** TODO fluentd-kubernetes-daemonset: https://github.com/fluent/fluentd-kubernetes-daemonset
 ** TODO fluent bit log to multiple endpoints
+* fluentd                                                          :noexport:
+** how fluentd get kubernetes information
+https://github.com/fabric8io/fluent-plugin-kubernetes_metadata_filter
+#+BEGIN_EXAMPLE
+```{
+  "log": "2015/05/05 19:54:41 \n",
+  "stream": "stderr",
+  "docker": {
+    "id": "df14e0d5ae4c07284fa636d739c8fc2e6b52bc344658de7d3f08c36a2e804115",
+  }
+  "kubernetes": {
+    "host": "jimmi-redhat.localnet",
+    "pod_name":"fabric8-console-controller-98rqc",
+    "pod_id": "c76927af-f563-11e4-b32d-54ee7527188d",
+    "container_name": "fabric8-console-container",
+    "namespace_name": "default",
+    "namespace_id": "23437884-8e08-4d95-850b-e94378c9b2fd",
+    "namespace_annotations": {
+      "fabric8.io/git-commit": "5e1116f63df0bac2a80bdae2ebdc563577bbdf3c"
+    },
+    "namespace_labels": {
+      "product_version": "v1.0.0"
+    },
+    "labels": {
+      "component": "fabric8Console"
+    }
+  }
+}```
+
+At least from this fluentd k8s filter plugin, I don’t see more meta data compared to fluent-bit
+Let’s see
+#+END_EXAMPLE
+* #  --8<-------------------------- separator ------------------------>8-- :noexport:
