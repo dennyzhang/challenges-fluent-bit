@@ -25,7 +25,7 @@
 <a href="http://makeapullrequest.com" target="_blank" rel="nofollow"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/></a>
 #+END_HTML
 * Fluent-Bit
-File me [[https://github.com/DennyZhang/challenges-python-datastructure/issues][Issues]] or star [[https://github.com/DennyZhang/challenges-fluent-bit][this repo]]
+File me [[https://github.com/DennyZhang/challenges-fluent-bit/issues][Issues]] or star [[https://github.com/DennyZhang/challenges-fluent-bit][this repo]]
 
 See more challenges from Denny: [[https://github.com/topics/denny-challenges][#denny-challenges]]
 
