@@ -185,6 +185,14 @@ key: stream, value: stdout
 key: time, value: 2018-08-08T18:16.27.002369384Z
 key: kubernetes, value: map[pod_name:fluent-bit-n588c namespace_name: oratos pod_id:a987f335-9b36-11e8-9fa9-080027b477ce labels:map[controller-revision-hash:545891415 k8s-app:logging-agent kubernetes.io/cluster-service:true pod-template-generation:1 version:v1] host:minikube container_name:fluent-bit docker_id:5f5bcedc9a98d6c4705632cdb55d9bcb572b7fc80dbb1da3e440d092d56ea4f5]
 #+END_EXAMPLE
+*** For tail_file input plugin of fluent-bit, could I specify file path like: /var/log/*/apache/*.log?
+It eventually use *glob* function of C. So probably, yes.
+
+tail_scan.c:flb_tail_scan -> tail_scan.c:do_glob
+
+https://github.com/fluent/fluent-bit/blob/master/plugins/in_tail/tail_scan.c#L150
+
+https://github.com/fluent/fluent-bit/blob/master/plugins/in_tail/tail_scan.c#L202
 *** How fluent-bit notice a new log file creation or deletion?
 It rescan the log folder every 10 seconds
 #+BEGIN_EXAMPLE
@@ -221,14 +229,6 @@ Hi,
 
 if I am not wrong when a Pod get's deleted, the log files for that container persists for a period of time. Now the re-scan of the path to find new logs happens by default every 60 seconds or based in the value of "Refresh_Interval" (which you have set to 10 seconds).
 #+END_EXAMPLE
-*** For tail_file input plugin of fluent-bit, could I specify file path like: /var/log/*/apache/*.log?
-It eventually use *glob* function of C. So probably, yes.
-
-tail_scan.c:flb_tail_scan -> tail_scan.c:do_glob
-
-https://github.com/fluent/fluent-bit/blob/master/plugins/in_tail/tail_scan.c#L150
-
-https://github.com/fluent/fluent-bit/blob/master/plugins/in_tail/tail_scan.c#L202
 * More Resources
 License: Code is licensed under [[https://www.dennyzhang.com/wp-content/mit_license.txt][MIT License]].
 #+BEGIN_HTML
