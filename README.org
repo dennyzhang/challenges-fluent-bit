@@ -178,6 +178,41 @@ curl --header "Authorization: Bearer $TOKEN" -k https://kubernetes.default.svc.c
   }
 }
 #+END_EXAMPLE
+*** How fluent-bit notice a new log file creation or deletion?
+#+BEGIN_EXAMPLE
+DennyZhang [11:40 PM]
+Hi XXX
+
+May I ask one question about tail input plugin in fluent-bit
+
+We’re using below input to parse k8s pod log files.
+    ```[INPUT]
+        Name              tail
+        Tag               kube.*
+        Path              /var/log/containers/*.log
+        Parser            docker
+        DB                /var/log/flb_kube.db
+        Mem_Buf_Limit     5MB
+        Skip_Long_Lines   On
+        Refresh_Interval  10```
+
+Whenever developers start or delete a pod, /var/log/containers will create or delete a log file.
+
+*We are wondering what the behavior fluent-bit would be*
+```1. Whether we need to restart or reload fluent-bit, if that happens
+2. What's the latency when the log file are created or deleted, but fluent-bit haven't detected.```
+
+Checking the code, here is my understanding. Would you help us to confirm?
+```1. When tail input plugin loads, it will register a timer to rescan the log folder. (in_tail_init function in tail.c. https://github.com/fluent/fluent-bit/blob/d2d3d363c6f852f155d45566e1c4155024327913/plugins/in_tail/tail.c#L221-L225)
+2. The rescan interval is every 60 seconds (https://github.com/fluent/fluent-bit/blob/d2d3d363c6f852f155d45566e1c4155024327913/plugins/in_tail/tail.h#L38)
+3. Whenever developers create a Pod, the associate log file will be detected after 60 seconds. And no service restart is required
+4. Whenever developers delete a Pod, file read will run into exception. Thus no more action will be required. (https://github.com/fluent/fluent-bit/blob/d2d3d363c6f852f155d45566e1c4155024327913/plugins/in_tail/tail_file.c#L658)```
+
+XXX [7:58 PM]
+Hi,
+
+if I am not wrong when a Pod get's deleted, the log files for that container persists for a period of time. Now the re-scan of the path to find new logs happens by default every 60 seconds or based in the value of "Refresh_Interval" (which you have set to 10 seconds).
+#+END_EXAMPLE
 * More Resources
 License: Code is licensed under [[https://www.dennyzhang.com/wp-content/mit_license.txt][MIT License]].
 #+BEGIN_HTML
@@ -188,3 +223,252 @@ License: Code is licensed under [[https://www.dennyzhang.com/wp-content/mit_lice
 <a href="https://github.com/DennyZhang"><img align="bottom"src="https://www.dennyzhang.com/wp-content/uploads/sns/github.png" alt="github" /></a>
 <a href="https://www.dennyzhang.com/slack" target="_blank" rel="nofollow"><img align="bottom" src="https://slack.dennyzhang.com/badge.svg" alt="slack"/></a>
 #+END_HTML
+* [#A] fluent bit                                                  :noexport:
+#+BEGIN_EXAMPLE
+https://fluentbit.io/documentation/current/installation/docker.html
+
+docker run -t -d --name fluent-bit  -p 2020:2020 -p 24224:24224 -v fluent-bit.conf:/etc/fluent-bit.conf --entrypoint=/bin/bash fluent/fluent-bit:0.13
+
+docker exec -it fluent-bit bash
+
+docker cp fluent-test.conf fluent-bit:/root/fluent-test.conf
+/fluent-bit/bin/fluent-bit -c /root/fluent-test.conf
+
+docker stop fluent-bit; docker rm fluent-bit
+#+END_EXAMPLE
+** #  --8<-------------------------- separator ------------------------>8-- :noexport:
+** HALF fluent bit restart
+** HALF how fluent bit monitor dynamic input files
+** #  --8<-------------------------- separator ------------------------>8-- :noexport:
+** TODO fluent bit compatible for promethus
+** TODO fluent bit performance metrics
+** TODO fluent bit multiple syslog output
+** TODO enable fluent-bit buffering with filesystem backend
+https://fluentbit.io/documentation/0.13/getting_started/buffer.html
+** #  --8<-------------------------- separator ------------------------>8-- :noexport:
+** TODO verify endpoint restart: whether fluent bit agent will auto healed
+** TODO fluent bit: how to detect backend status is error
+** #  --8<-------------------------- separator ------------------------>8-- :noexport:
+** DONE hello world with docker
+   CLOSED: [2018-06-27 Wed 00:35]
+*** [#A] run as a container
+https://fluentbit.io/documentation/current/installation/docker.html
+
+docker run -t -d --name fluent-bit  -p 2020:2020 -p 24224:24224 -v fluent-bit.conf:/etc/fluent-bit.conf --entrypoint=/bin/bash fluent/fluent-bit:0.13
+
+docker exec -it fluent-bit bash
+
+docker cp fluent-bit.conf fluent-bit:/root/fluent-bit.conf
+/fluent-bit/bin/fluent-bit -c /root/fluent-bit.conf
+
+docker stop fluent-bit; docker rm fluent-bit
+*** simple test
+docker pull fluent/fluent-bit:0.13
+docker run -ti fluent/fluent-bit:0.13 /fluent-bit/bin/fluent-bit -i cpu -o stdout -f 1
+*** more customization
+**** fluent-bit.conf
+cat > fluent-bit.conf << EOF
+[SERVICE]
+    HTTP_Server  On
+    HTTP_Listen  0.0.0.0
+    HTTP_PORT    2020
+
+[INPUT]
+    Name forward
+
+    # The Listen interface, by default we listen on all of them
+    Listen 0.0.0.0
+
+    # Default TCP listener port
+    Port 24224
+
+    # Buffer (Kilobytes)
+    # ------------------
+    # Specify the size of the receiver buffer. Incoming records
+    # must be inside this limit. By default 512KB.
+    Buffer 512000
+
+[OUTPUT]
+    Name file
+    Match *
+    Path /tmp/output.txt
+EOF
+**** run daemon service
+# docker run -p 2020:2020 -p 24224:24224 --name fluent-bit -v /Users/zdenny/Dropbox/private_data/work/vmware/fluent-bit/fluent-bit.conf:/etc/fluent-bit.conf -ti fluent/fluent-bit:0.13 /fluent-bit/bin/fluent-bit -c /etc/fluent-bit.conf
+docker run -t -d --name fluent-bit -p 2020:2020 -p 24224:24224 -v /Users/zdenny/Dropbox/private_data/work/vmware/fluent-bit/fluent-bit.conf:/etc/fluent-bit.conf --entrypoint=/bin/bash fluent/fluent-bit:0.13
+
+docker exec -it fluent-bit bash
+
+/fluent-bit/bin/fluent-bit -c /etc/fluent-bit.conf
+
+nc localhost 24224
+**** verify health check
+https://fluentbit.io/documentation/current/configuration/monitoring.html
+
+curl -s http://127.0.0.1:2020/api/v1/metrics
+**** check log
+docker exec -it fluent-bit tail /tmp/output.txt
+**** destroy
+docker stop fluent-bit; docker rm fluent-bit
+** BYPASS hello world doens't work: doesn't work well in mac OS
+   CLOSED: [2018-06-27 Wed 00:33]
+cat > fluent-bit.conf << EOF
+[SERVICE]
+    HTTP_Server  On
+    HTTP_Listen  0.0.0.0
+    HTTP_PORT    2020
+
+[INPUT]
+    Name forward
+
+    # The Listen interface, by default we listen on all of them
+    Listen 0.0.0.0
+
+    # Default TCP listener port
+    Port 24224
+
+    # Buffer (Kilobytes)
+    # ------------------
+    # Specify the size of the receiver buffer. Incoming records
+    # must be inside this limit. By default 512KB.
+    Buffer 512000
+
+[OUTPUT]
+    Name stdout
+    Match *
+EOF
+
+bin/fluent-bit -c fluent-bit.conf
+** DONE Concept Routing Tag/Match
+   CLOSED: [2018-06-26 Tue 23:45]
+https://fluentbit.io/documentation/current/getting_started/routing.html
+
+Tag is a human-readable indicator that helps to identify the data source.
+
+If some data have a Tag that don't have a match upon routing time, the data it's deleted.
+#+BEGIN_EXAMPLE
+[INPUT]
+    Name cpu
+    Tag  my_cpu
+
+[INPUT]
+    Name mem
+    Tag  my_mem
+
+[OUTPUT]
+    Name   es
+    Match  my_c*
+
+[OUTPUT]
+    Name   stdout
+    Match  my_mem
+#+END_EXAMPLE
+** DONE use fluent bit to monitor http endpoint
+   CLOSED: [2018-06-26 Tue 23:31]
+https://fluentbit.io/documentation/current/input/health.html
+
+#+BEGIN_EXAMPLE
+zdenny-a01:~ zdenny$ nc -l 8080
+zdenny-a01:~ zdenny$
+#+END_EXAMPLE
+
+#+BEGIN_EXAMPLE
+zdenny-a01:build zdenny$ fluent-bit -i health://127.0.0.1:8080 -o stdout
+Fluent-Bit v0.14.0
+Copyright (C) Treasure Data
+
+[2018/06/26 23:30:41] [ info] [engine] started (pid=23405)
+[2018/06/26 23:30:42] [error] [io] TCP connection failed: 127.0.0.1:8080 (Connection refused)
+[2018/06/26 23:30:43] [error] [io] TCP connection failed: 127.0.0.1:8080 (Connection refused)
+[2018/06/26 23:30:44] [error] [io] TCP connection failed: 127.0.0.1:8080 (Connection refused)
+[2018/06/26 23:30:45] [error] [io] TCP connection failed: 127.0.0.1:8080 (Connection refused)
+[0] health.0: [1530081042.000000000, {"alive"=>false}]
+[1] health.0: [1530081043.000000000, {"alive"=>false}]
+[2] health.0: [1530081044.000000000, {"alive"=>false}]
+[3] health.0: [1530081045.000000000, {"alive"=>false}]
+[2018/06/26 23:30:47] [error] [io] TCP connection failed: 127.0.0.1:8080 (Connection refused)
+[2018/06/26 23:30:48] [error] [io] TCP connection failed: 127.0.0.1:8080 (Connection refused)
+[2018/06/26 23:30:49] [error] [io] TCP connection failed: 127.0.0.1:8080 (Connection refused)
+[0] health.0: [1530081046.000000000, {"alive"=>true}]
+[1] health.0: [1530081047.000000000, {"alive"=>false}]
+[2] health.0: [1530081048.000000000, {"alive"=>false}]
+[3] health.0: [1530081049.000000000, {"alive"=>false}]
+[4] health.0: [1530081050.000000000, {"alive"=>true}]
+[2018/06/26 23:30:51] [error] [io] TCP connection failed: 127.0.0.1:8080 (Connection refused)
+[2018/06/26 23:30:52] [error] [io] TCP connection failed: 127.0.0.1:8080 (Connection refused)
+[2018/06/26 23:30:53] [error] [io] TCP connection failed: 127.0.0.1:8080 (Connection refused)
+^C[engine] caught signal (SIGINT)
+[2018/06/26 23:30:53] [ info] [input] pausing health.0
+#+END_EXAMPLE
+** DONE Enable a customized flent bit plugin
+   CLOSED: [2018-06-27 Wed 21:05]
+ https://github.com/fluent/fluent-bit/blob/master/GOLANG_OUTPUT_PLUGIN.md
+
+** DONE fluent bit log error message
+   CLOSED: [2018-06-28 Thu 22:22]
+    flb_info("[out_syslog] addr=%s", ctx->addr);
+
+    fprintf(stderr, "Here6\n");
+
+    flb_debug("[out_kafka_rest] host=%s port=%i",
+              ins->host.name, ins->host.port);
+** DONE fluent-bit log to file
+   CLOSED: [2018-07-02 Mon 17:12]
+ /bin/fluent-bit -i cpu -o file -p path=/tmp/output.txt -f 1
+** #  --8<-------------------------- separator ------------------------>8-- :noexport:
+** TODO backpressure
+** TODO loadbalancing
+** TODO syslog tls
+** TODO output retry
+** TODO output to syslog
+** TODO fluentbit backpressure
+ https://fluentbit.io/documentation/0.13/configuration/backpressure.html
+** TODO fluentbit support client side loadbalancing / failover
+ https://github.com/fluent/fluent-bit/issues/203#issuecomment-389579836
+
+** useful link
+http://edsiper.linuxchile.cl/blog/
+** HALF fluent bit multiple output: https://github.com/fluent/fluent-bit/issues/305
+ github/fluent-bit/conf
+** #  --8<-------------------------- separator ------------------------>8-- :noexport:
+** DONE fluent-bit mechanism: retry when output plugin keeps returning FLB_RETRY
+   CLOSED: [2018-08-03 Fri 09:59]
+ Last day, Warren and I were wondering what retry logic fluent-bit enginee would be.
+
+ When the engine tries flush one message, but our output plugin returns FLB_RETRY. Maybe the syslog endpoint is unavailable, let's say that.
+
+ When it retries, our plugin keep returning FLB_RETRY. What FB will do? Keep retrying, or drop it with some max retries mechanisms?
+
+ After checking the source code, it enforces with max retries mechanism. And default max retries is 0.
+ So it will drop it, when we return FLB_RETRY again. 
+
+ We can customize the max retries via retry_limit property.
+
+ After checking the source code, it enforces with max retries mechanism. But default max retries is 0.
+
+ So *it will drop the message*, when we return FLB_RETRY again. 
+
+ We can customize the max retries via retry_limit property.
+
+ 1. retry_limit configuration
+   https://github.com/fluent/fluent-bit/blob/ed4b2f09d68f1b71bed53aaa37a048700adc2b5d/src/flb_output.c#L349-L364
+ 2. When output returns retry, FB engine create a retry task.
+   https://github.com/fluent/fluent-bit/blob/ed4b2f09d68f1b71bed53aaa37a048700adc2b5d/src/flb_engine.c#L177-L188
+ 3. And eash retry task has attribute of task->retries. And each output plugin has attribute of retry_limit.
+   https://github.com/fluent/fluent-bit/blob/ed4b2f09d68f1b71bed53aaa37a048700adc2b5d/src/flb_task.c#L88-L138
+ 4. Based on task->retries and plugin->retry_limit, it determines whether keep trying or return error
+** TODO [#A] How to integrate fluentd with vRealize Log
+** TODO [#A] try kube-fluentd-operator: https://github.com/vmware/kube-fluentd-operator 
+
+** TODO reload fluentbit
+** TODO try k8s fluentd-operator
+** TODO /Users/zdenny/Dropbox/private_data/work/vmware/fluent-bit/plugins/filter_kubernetes/kubernetes.c
+** TODO fluentd-kubernetes-daemonset: https://github.com/fluent/fluentd-kubernetes-daemonset
+** TODO fluent agent: refresh: 10 seconds
+** TODO fluent bit log to multiple endpoints
+** DONE fluent bit sample k8s log
+   CLOSED: [2018-08-08 Wed 11:23]
+key: log, value: key: time, value: 2018-08-8T18:16:26.000979098Z
+key: stream, value: stdout
+key: time, value: 2018-08-08T18:16.27.002369384Z
+key: kubernetes, value: map[pod_name:fluent-bit-n588c namespace_name: oratos pod_id:a987f335-9b36-11e8-9fa9-080027b477ce labels:map[controller-revision-hash:545891415 k8s-app:logging-agent kubernetes.io/cluster-service:true pod-template-generation:1 version:v1] host:minikube container_name:fluent-bit docker_id:5f5bcedc9a98d6c4705632cdb55d9bcb572b7fc80dbb1da3e440d092d56ea4f5]
